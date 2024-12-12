@@ -56,11 +56,22 @@ human = UserProxyAgent("human", code_execution_config=False)
 # AssistantAgent your question.
 chat_result = human.initiate_chat(
     assistant,
-    message="In short, what's the big deal about AI?",
+    message="In one sentence, what's the big deal about AI?",
 )
 ```
-```bash
-[OUTPUT HERE]
+Output:
+```
+human_you (to assistant):
+
+In one sentence, what's the big deal about AI?
+
+--------------------------------------------------------------------------------
+assistant (to human_you):
+
+The big deal about AI is its ability to analyze vast amounts of data, learn from it, and make predictions or automate tasks, significantly enhancing efficiency and decision-making across various fields.
+
+--------------------------------------------------------------------------------
+Replying as human_you. Provide feedback to assistant. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:
 ```
 You can continue to interact with assistant agent through your console, type `exit` to end the chat.
 
@@ -70,6 +81,8 @@ These two funny agents will chat with each other and they're both powered by an 
 We give them their persona and instructions by setting their system message.
 
 To make sure they don't talk forever, we're going to instruct one to say the keyword 'HILARIOUS' to end the chat. Then, we set the other agent's `is_termination_msg` to a lambda function to look for that keyword in the messages they receive.
+
+An important addition here is the setting of the `human_input_mode` to `NEVER`, ensuring agents don't revert back to you instead of terminating. An alternative here would have been to use the `AssistantAgent`, like in the previous example, which has that as the default.
 
 ```python
 import os
@@ -81,12 +94,14 @@ emma = ConversableAgent(
     "Emma",
     llm_config=llm_config,
     system_message="Your name is Emma and you are a comedian in two-person comedy show. Say the word HILARIOUS once you've heard a joke from Jack.",
+    human_input_mode="NEVER",
 )
 
 jack = ConversableAgent(
     "Jack",
     llm_config=llm_config,
     system_message="Your name is Jack and you are a comedian in a two-person comedy show.",
+    human_input_mode="NEVER",
     is_termination_msg=lambda msg: "hilarious" in msg["content"].lower(), # Ends the chat if it exists
 )
 
@@ -95,7 +110,140 @@ chat_result = emma.initiate_chat(
     message="Jack, tell me a joke about goldfish and peanut butter.",
 )
 ```
-All being well, Emma will ask Jack to tell her a joke, Jack will then respond to Emma with a joke, Emma will say it was 'HILARIOUS', and, finally, Jack will check for that keyword and end the chat.
+So, Emma will ask Jack to tell her a joke, Jack will then respond to Emma with a joke, Emma will say it was 'HILARIOUS', and, finally, Jack will check for that keyword and end the chat before replying.
+```
+Emma (to Jack):
+
+Jack, tell me a joke about goldfish and peanut butter.
+
+--------------------------------------------------------------------------------
+Jack (to Emma):
+
+Sure, Emma! Why did the goldfish bring peanut butter to the party?
+
+Because it heard it was going to be a “fin”-tastic time, and it wanted to stick around!
+
+--------------------------------------------------------------------------------
+Emma (to Jack):
+
+HILARIOUS! That fish really knows how to spread the fun!
+
+--------------------------------------------------------------------------------
+```
+### Group chat
+Let's expand to more agents in a group conversation. We set up the agents as we've done so far, except we add another one, the GroupChatManager, who will decide who speaks. Together with them, we create a GroupChat object that encapsulates all the agents and overall group chat settings.
+
+```python
+import os
+from autogen import AssistantAgent, GroupChatManager, GroupChat
+
+llm_config = {"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
+
+accounts = AssistantAgent(
+    "Accounts",
+    llm_config=llm_config,
+    description="Represents the Accounts department",
+    system_message="You lead the Accounts department in the company.",
+)
+
+marketing = AssistantAgent(
+    "Marketing",
+    llm_config=llm_config,
+    description="Represents the Marketing department",
+    system_message="You lead the Marketing department in the company.",
+)
+
+technology = AssistantAgent(
+    "Technology",
+    llm_config=llm_config,
+    description="Represents the Information Technology department",
+    system_message="You lead the Information Technology department in the company.",
+)
+
+operations = AssistantAgent(
+    "Operations",
+    llm_config=llm_config,
+    description="Represents the Operations department",
+    system_message="You lead the Operations department in the company. Say 'MEETING DONE' when all heads have spoken.",
+    is_termination_msg=lambda x: True if "MEETING DONE" in x["content"] else False
+)
+
+groupchat = GroupChat(
+    agents=[operations, accounts, marketing, technology],
+    speaker_selection_method="auto", # or "manual", "random", "round_robin", a function
+    messages=[]
+)
+
+groupchatmanager = GroupChatManager(
+    llm_config=llm_config,
+    groupchat=groupchat,
+    system_message="You manage a conversation with department heads, have each answer the question. Hand back to the Operations team when finished.",
+)
+
+chat_result = operations.initiate_chat(
+    groupchatmanager,
+    message="What are the top 3 priorities for your department this quarter?",
+)
+```
+About this group chat:
+- A group chat is started by an agent initiating it with a GroupChatManager. We have 4 agents in the group chat.
+- The GroupChatManager is selecting agents using it's LLM because the GroupChat's `speaker_selection_method` is `auto`. [Other options](https://ag2ai.github.io/ag2/docs/tutorial/conversation-patterns#group-chat) are available.
+- In `auto` mode, how will the GroupChatManager determine the next speaker? It compiles the list of agents together with their `description` and has a prompt that asks which is the next best speaker. You can customize the prompt.
+- We are using a termination message check in this example, but you could also use the GroupChat's `max_round` to end the chat after a certain number of turns.
+```
+Operations (to chat_manager):
+
+What are the top 2 priorities for your department this quarter?
+
+--------------------------------------------------------------------------------
+
+Next speaker: Accounts
+
+Accounts (to chat_manager):
+
+The top three priorities for the Accounts department this quarter are:
+
+1. **Financial Reporting and Analysis**: Finalizing and delivering accurate financial reports for Q3, including budget versus actual analysis, to provide insights for management decision-making.
+
+2. **Improving Invoice Reconciliation Processes**: Streamlining the invoice reconciliation process to reduce discrepancies and enhance the efficiency of accounts payable and receivable operations.
+
+--------------------------------------------------------------------------------
+
+Next speaker: Marketing
+
+Marketing (to chat_manager):
+
+As the head of the Marketing department, our top three priorities this quarter are:
+
+1. **Campaign Optimization**: Enhancing the performance of ongoing marketing campaigns by analyzing data and metrics, adjusting strategies, and leveraging A/B testing to improve conversion rates and ROI.
+
+2. **Brand Awareness Initiatives**: Launching new initiatives aimed at increasing brand visibility and engagement across key demographics, including social media campaigns, partnerships, and community events.
+
+--------------------------------------------------------------------------------
+
+Next speaker: Technology
+
+Technology (to chat_manager):
+
+As the head of the Information Technology department, our top three priorities this quarter are:
+
+1. **Cybersecurity Enhancement**: Strengthening our cybersecurity measures to protect company data from emerging threats, including conducting regular vulnerability assessments and implementing advanced security protocols.
+
+2. **Infrastructure Upgrades**: Upgrading our IT infrastructure to improve system performance and reliability, including server enhancements, transitioning to cloud-based solutions, and ensuring scalability for future growth.
+
+--------------------------------------------------------------------------------
+
+Next speaker: Operations
+
+Operations (to chat_manager):
+
+Thank you all for sharing your departmental priorities.
+
+MEETING DONE.
+
+--------------------------------------------------------------------------------
+```
+
 
 **UP TO HERE**
 

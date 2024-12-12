@@ -36,7 +36,7 @@ Examples of ways to end a chat include setting a maximum number of replies/turns
 
 # Let's try it
 
-Let's get AG2 installed:
+Get AG2 installed:
 ```bash
 pip install ag2
 ```

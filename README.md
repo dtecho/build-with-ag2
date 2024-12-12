@@ -62,14 +62,14 @@ chat_result = human.initiate_chat(
 ```bash
 [OUTPUT HERE]
 ```
-You'll can continue to interact with assistant agent through your console, type `exit` to end the chat.
+You can continue to interact with assistant agent through your console, type `exit` to end the chat.
 
 ### Two-way chat
-These two funny agents that will chat with each other and they're both powered by an LLM.
+These two funny agents will chat with each other and they're both powered by an LLM.
 
-We're going to give them their persona and instructions by setting their system message.
+We give them their persona and instructions by setting their system message.
 
-To make sure they don't talk forever, we're going to instruct one to say the keyword 'HILARIOUS' to end the chat. Then, we set the other agent's `is_termination_msg` to a lambda function to look for that keyword in the message they've received.
+To make sure they don't talk forever, we're going to instruct one to say the keyword 'HILARIOUS' to end the chat. Then, we set the other agent's `is_termination_msg` to a lambda function to look for that keyword in the messages they receive.
 
 ```python
 import os
